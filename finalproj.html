@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>16-229 Final Project</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+  </head>
+  <body>
+    <main>
+        <h1>16-299 Final Project: Improving a PID Controller</h1>  
+        <h2>By: Harrison Chui, Grace Tang, Henry Weise, Steven Kam</h2>
+        <hr>
+        <div class="p-container">
+          The objective of this page is to guide the readers in creating a PID controller that ensures precise
+           and accurate movement for a robot. The project involves building the robot with specific wheel configurations,
+            determining its position using odometry calculations, implementing a PID controller for precise movement, 
+            incorporating motor encoder values to address wheel slip, and applying motor scale factors for straight driving. 
+            The step-by-step instructions provided will enable users to understand and apply the principles of PID control to 
+            achieve the desired performance of their robot.
+        </div>
+        <hr>
+        <h2>Supplies</h2>
+        <ul>
+          <li> Lego Mindstorm Kit </li>
+          <li> <A HREF="https://www.dexterindustries.com/brickpi/">BrickPi</A></li>
+          <li> 12V battery pack</li>
+        </ul>
+        <hr>
+        <h2>Step 1: Building the Robot</h2>
+        <div class="p-container">
+          <p>
+            Since our movements will be constrained to forward, left, and right, we decided to build a robot with two wheels and a caster wheel. 
+            This allowed us to turn in place by giving opposite motor commands to the two wheels; negative to right, positive to left for a left turn, and positive to right and negative to left for a right turn. 
+            <br>
+            We built a compact robot and mounted our Raspberry Pi on top of it, which allows us to control the motors using Python. Our robot is pictured below.
+          </p>
+          <div class="image-container">
+            <img src="public/robotPic.png" alt="Robot Image">
+          </div>
+        </div>
+        <hr>
+        <h2>Step 2: Determining Odometry</h2>
+        <div class="p-container">
+          <p>
+            Odometry is the use of data from motion sensors to estimate change in position over time. In this case, we will use it to
+            determine if the robot has reached its target destination in theta and distance. We use the motor encoder position over a time step to derive the state of the robot. The encoder tells us the change in angle of the wheel, which we can then propagate to change in horizontal and vertical directions using trigonometry. Refer to the image below for the calculations.
+            <br>
+          </p>
+          <div class="image-container">
+            <img src="public/odometry.png" alt="Odometry Image">
+          </div>
+          <p> 
+            This gives us an estimated position of the robot, although it does not take slip into account (i.e. if the wheels turn but the robot doesn’t move). To calculate odometry in Python, we first imported the math and time packages and initialized some constants and variables:
+          </p>
+          <div class="constants-Img">
+            <img src="public/constants.png" alt="Constants Image">
+          </div>
+          <p> 
+            WHEEL_RADIUS and WHEEL_DISTANCE are in millimeters while TIME_STEP is in seconds. Using these constants, we can simply write the above functions, updating the current abs_x, abs_y, and abs_theta. 
+          </p>
+        </div>
+        <hr>
+        <h2>Step 3: Programming PID Controller</h2>
+        <div class="p-container">
+          <p> 
+            A PID (Proportional-Integral-Derivative) controller is a feedback controller that consists of three values: Proportional, Integral, Derivative. By tuning these variables, it calculates an error based on the desired state and the current state (feedback) and adjusts the controller input accordingly to minimize future error. 
+          </p>
+          <ol>
+            <li><strong>Proportional (P):</strong> Proportional term generates a control term that is proportional to the current error based on the magnitude of error. This is what guides the system towards the desired state.</li>
+            <li><strong>Integral (I):</strong> Integral term accumulates error to help eliminate steady-state errors. It will adjust the control output based on historic error which helps gradually increase or decrease the control signal to minimize accumulated error.</li>
+            <li><strong>Derivative (D):</strong> Derivative term considers the rate of change of error, thus predicting and preventing potential overshoots/undershoots. It also helps reduce the control output as the error approaches zero, preventing oscillations and providing stability.</li>
+          </ol>
+          <p>
+
+            By adjusting these parameters, a PID controller can balance between stability and responsiveness. This adjustment is something we explored in this project as we wanted to see an increase in precision without an increase in instability. 
+            <br>
+            <br>
+            We began writing our PID controller in Python. 
+            <br>
+            <br>
+            We imported the necessary libraries:
+            <pre>
+              <code>
+                import time
+              </code>
+            </pre>
+            And created our constant variables (one for y parameter, one for theta parameter):
+            <pre>
+              <code>
+                Kp
+                Ki
+                Kd
+                prev_error
+                integral
+              </code>
+            </pre>
+            <p> 
+              Then to calculate our control output, we considered our current state (x, y, theta) as determined by odometry and our desired state (x, y, theta). We limited the movements of our robot to be forward movements (in the y direction) or some rotational movement (only theta). Therefore we had two possible input controls: 
+            </p>
+            <ol>
+              <li><strong>Forward Movement:</strong> For forward movement, we considered the y and theta value of our state. Y state to determine how far forward we had gone, and the theta value to determine if there was any slip in our wheels. Theoretically, we want to ensure that we are facing in the same direction we started in when moving forward, therefore our error in theta should be 0. Thus, our PID took into account error for y and error for theta in our calculations.</li>
+              <li><strong>Rotational Movement (turning):</strong> For rotational movement, we considered theta value of our state only. Therefore our error was calculated based on our odometry calculated current theta and our target theta. </li>
+            </ol>
+            For each of these two possible inputs, we calculated our control output in a similar fashion: 
+              Given our error value(s), we calculated the proportional term (respective to the correct inputs): 
+            
+            <pre>
+              <code>
+                proportional = Kp * error 
+              </code>
+            </pre>
+            Updated our total error:
+            <pre>
+              <code>
+                integral += Ki * error
+              </code>
+            </pre>
+            Calculate the derivative term and updated the last_error:
+            <pre>
+              <code>
+                derivative = Kd * (error - last_error)
+                last_error = error 
+              </code>
+            </pre>
+            Then calculated the sum to be our control output:
+            <pre>
+              <code>
+                return proportional + integral + derivative
+              </code>
+            </pre>
+          </p>
+        </div>
+        <div class="video-container">
+          <h2>Robot with Inital PID </h2>
+            <div class="video-wrapper">
+            <video controls>
+              <source src="public/InitialFront.MOV" type="video/mp4">
+              <!-- Add additional <source> elements for different video formats if needed -->
+            </video>
+            <video controls>
+              <source src="public/InitialBird.MOV" type="video/mp4">
+              <!-- Add additional <source> elements for different video formats if needed -->
+            </video>
+            </div>
+        </div>
+
+        <hr>
+        <h2>Step 4: PID on motor encoder values</h2>
+        <div class="p-container">
+          <p>
+            We soon came to realize that just taking into consideration the y and theta values during forward motion did not properly account for wheel slip quickly enough to reduce slip in the x direction. Therefore, rather than take in our odometry calculated values for our current x, y positions, we took into account the difference in rotational encoder values. Because we can power each motor individually, and each motor has its own encoder, we determined, theoretically, when moving forward, we want the encoder values between our wheels to be relatively similar to reduce slip. Therefore, our theory is that if one encoder were to be far greater than the other, we would decrease power to the first and increase power to the second. 
+          </p>
+        </div>
+        <div class="video-container">
+          <h2>Robot with Current PID </h2>
+            <div class="video-wrapper">
+            <video controls>
+              <source src="public/CurrFront.MOV" type="video/mp4">
+              <!-- Add additional <source> elements for different video formats if needed -->
+            </video>
+            <video controls>
+              <source src="public/CurrBird.MOV" type="video/mp4">
+              <!-- Add additional <source> elements for different video formats if needed -->
+            </video>
+            </div>
+        </div>
+
+        <hr>
+        <h2>Step 5: Motor Scale Factors</h2>
+        <div class="p-container">
+          <p>
+            Due to physical differences between two motors, sending two motors identical motor commands will not result in them rotating the same amount. Thus, sending identical motor commands to the robot will cause it to veer in one direction. To counteract this veering, we determined a couple scale factors, or the factor between the left motor command and right motor command needed for the robot to drive straight. We determined a few different scale factors for our robot:
+          </p>
+
+          <table class="center">
+            <tr>
+              <th>Scale Factor</th>
+              <th>Command Range</th>
+            </tr>
+            <tr>
+              <td>0.95</td>
+              <td>(35, 100]</td>
+            </tr>
+            <tr>
+              <td>0.97</td>
+              <td>(25, 25]</td>
+            </tr>
+            <tr>
+              <td>0.91</td>
+              <td>[0, 25]</td>
+            </tr>
+          </table>
+
+          <p>For example, these commands adhere to the scale factors above.</p>
+          <table class="center">
+            <tr>
+              <th>Left Power</th>
+              <th>Right Power</th>
+            </tr>
+            <tr>
+              <td>38</td>
+              <td>40</td>
+            </tr>
+            <tr>
+              <td>29</td>
+              <td>30</td>
+            </tr>
+            <tr>
+              <td>18.3</td>
+              <td>20</td>
+            </tr>
+          </table>
+        
+          <div class="video-container">
+            <h2> With and Without Scale Factor  </h2>
+              <div class="video-wrapper">
+              <video controls>
+                <source src="public/beforeSF.MOV" type="video/mp4">
+                <!-- Add additional <source> elements for different video formats if needed -->
+              </video>
+              <video controls>
+                <source src="public/afterSF.MOV" type="video/mp4">
+                <!-- Add additional <source> elements for different video formats if needed -->
+              </video>
+              </div>
+          </div>
+          <p>Our PID controller outputs a motor command. Then, we adjust the command by the scale factor to give a unique command to the left motor and the right motor, allowing our robot to drive straighter.</p>
+        </div>
+        
+
+    </main>
+  </body>
+</html>
+
+
+
